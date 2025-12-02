@@ -8,6 +8,7 @@ public class MappingProfile : Profile
     {
         CreateMap<Customer, CustomerDto>().ReverseMap();
         CreateMap<CreateCustomerDto, Customer>();
-        // Add order mappings later
+        CreateMap<Order, OrderDto>().ReverseMap();
+        CreateMap<CreateOrderDto, Order>();
     }
 }
