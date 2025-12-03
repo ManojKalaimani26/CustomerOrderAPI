@@ -1,85 +1,70 @@
-﻿using AutoMapper;
-using CustomerOrderAPI.Data;
-using CustomerOrderAPI.DTOs;
-using CustomerOrderAPI.Models;
+﻿using CustomerOrderAPI.DTOs;
+using CustomerOrderAPI.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 [ApiController]
 [Route("api/[controller]")]
 public class OrderController : ControllerBase
 {
-    private readonly AppDbContext _context;
-    private readonly IMapper _mapper;
+    private readonly IOrderService _orderService;
 
-    public OrderController(AppDbContext context, IMapper mapper)
+    public OrderController(IOrderService orderService)
     {
-        _context = context;
-        _mapper = mapper;
+        _orderService = orderService;
     }
 
     [HttpPost]
     public async Task<ActionResult<OrderDto>> CreateOrder(CreateOrderDto dto)
     {
-        var order = _mapper.Map<Order>(dto);
-        _context.Orders.Add(order);
-        await _context.SaveChangesAsync();
-
-        var result = _mapper.Map<OrderDto>(order);
-        return CreatedAtAction(nameof(GetOrderById), new { id = order.OrderId }, result);
+        var created = await _orderService.CreateOrderAsync(dto);
+        return CreatedAtAction(nameof(GetOrderById), new { id = created.OrderId }, created);
     }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<OrderDto>> GetOrderById(int id)
     {
-        var order = await _context.Orders.FindAsync(id);
+        var order = await _orderService.GetOrderByIdAsync(id);
         if (order == null) return NotFound();
-        return _mapper.Map<OrderDto>(order);
+        return order;
     }
 
     [HttpGet("customer/{customerId}")]
     public async Task<ActionResult<List<OrderDto>>> GetOrdersByCustomer(int customerId)
     {
-        var orders = await _context.Orders
-            .Where(o => o.CustomerId == customerId)
-            .ToListAsync();
-        return _mapper.Map<List<OrderDto>>(orders);
+        var orders = await _orderService.GetOrdersByCustomerAsync(customerId);
+        return orders;
     }
 
-    //[HttpPut("{id}")]
-    //public async Task<IActionResult> UpdateOrder(int id, CreateOrderDto dto)
-    //{
-    //    var order = await _context.Orders.FindAsync(id);
-    //    if (order == null) return NotFound();
-
-    //    _mapper.Map(dto, order);
-    //    await _context.SaveChangesAsync();
-    //    return NoContent();
-    //}
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateOrder(int id, CreateOrderDto dto)
     {
-        var order = await _context.Orders.FindAsync(id);
-        if (order == null) return NotFound();
-
-        // Status validation
-        if (dto.Status == "Shipped" && order.Status != OrderStatus.Confirmed)
-            return BadRequest("Cannot ship an order before it is confirmed.");
-
-        _mapper.Map(dto, order);
-        await _context.SaveChangesAsync();
+        var success = await _orderService.UpdateOrderAsync(id, dto);
+        if (!success) return NotFound();
         return NoContent();
     }
-
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteOrder(int id)
     {
-        var order = await _context.Orders.FindAsync(id);
-        if (order == null) return NotFound();
-
-        _context.Orders.Remove(order);
-        await _context.SaveChangesAsync();
+        var success = await _orderService.DeleteOrderAsync(id);
+        if (!success) return NotFound();
         return NoContent();
+    }
+
+    [HttpPut("{orderId}/status")]
+    public async Task<IActionResult> UpdateOrderStatus(int orderId, UpdateOrderStatusDto dto)
+    {
+        var result = await _orderService.UpdateOrderStatusAsync(orderId, dto);
+
+        return result switch
+        {
+            "NOT_FOUND" => NotFound("Order not found"),
+            "INVALID_STATUS" => BadRequest("Status must be Pending, Confirmed, or Shipped."),
+            "ALREADY_IN_STATUS" => BadRequest("Order is already in the selected status"),
+            "CONFIRM_REQUIRED" => BadRequest("Order must be confirmed before shipping"),
+            "ALREADY_SHIPPED" => BadRequest("Order is already shipped and cannot be updated"),
+            "SUCCESS" => Ok("Order status updated successfully"),
+            _ => BadRequest("Unknown error")
+        };
     }
 }

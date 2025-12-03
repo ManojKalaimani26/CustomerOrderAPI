@@ -9,8 +9,6 @@ public class CreateOrderDtoValidator : AbstractValidator<CreateOrderDto>
         RuleFor(x => x.Product).NotEmpty();
         RuleFor(x => x.Quantity).GreaterThan(0);
         RuleFor(x => x.Price).GreaterThan(0);
-        RuleFor(x => x.Status).NotEmpty().Must(s =>
-            s == "Pending" || s == "Confirmed" || s == "Shipped")
-            .WithMessage("Status must be Pending, Confirmed, or Shipped.");
+        // No Status here; it is handled separately.
     }
 }
